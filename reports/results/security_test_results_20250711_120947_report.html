@@ -1,0 +1,465 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zero Trust Security Test Results</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #007acc;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #007acc;
+            margin: 0;
+            font-size: 2.5em;
+        }
+        .header .subtitle {
+            color: #666;
+            margin-top: 10px;
+            font-size: 1.1em;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .summary-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .summary-card.score {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        .summary-card.failed {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+        }
+        .summary-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+        }
+        .summary-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .section h2 {
+            color: #007acc;
+            border-left: 4px solid #007acc;
+            padding-left: 15px;
+            margin-bottom: 20px;
+        }
+        .test-grid {
+            display: grid;
+            gap: 15px;
+        }
+        .test-item {
+            background: #f8f9fa;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        .test-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .test-item.failed {
+            border-left-color: #dc3545;
+            background: #fff5f5;
+        }
+        .test-item.error {
+            border-left-color: #ffc107;
+            background: #fffbf0;
+        }
+        .test-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .test-result {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .test-result.passed {
+            background: #d4edda;
+            color: #155724;
+        }
+        .test-result.failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .test-result.error {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .test-details {
+            margin-top: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+        .system-status {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .service-card {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .service-card.healthy {
+            border-color: #28a745;
+            background: #f8fff9;
+        }
+        .service-card.unhealthy {
+            border-color: #dc3545;
+            background: #fff5f5;
+        }
+        .service-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+        .service-status {
+            display: inline-block;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        .service-status.healthy {
+            background: #d4edda;
+            color: #155724;
+        }
+        .service-status.unhealthy {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .response-time {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .compliance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+        }
+        .compliance-section {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .compliance-section h3 {
+            margin: 0 0 15px 0;
+            color: #007acc;
+        }
+        .compliance-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .compliance-item:last-child {
+            border-bottom: none;
+        }
+        .compliance-status {
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .compliance-status.compliant {
+            background: #d4edda;
+            color: #155724;
+        }
+        .compliance-status.protected {
+            background: #cce7ff;
+            color: #004085;
+        }
+        .compliance-status.monitored {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            color: #666;
+        }
+        .metadata {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .metadata-item {
+            display: inline-block;
+            margin-right: 20px;
+            margin-bottom: 5px;
+        }
+        .metadata-label {
+            font-weight: bold;
+            color: #007acc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Zero Trust Security Test Results</h1>
+            <div class="subtitle">Kapsamlı Güvenlik Değerlendirme Raporu</div>
+        </div>
+
+        <div class="metadata">
+            <div class="metadata-item">
+                <span class="metadata-label">Değerlendirme Tarihi:</span> 
+                2025-07-11 12:09:47
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Sistem:</span> 
+                Zero Trust Prototype
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Versiyon:</span> 
+                1.0.0
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Değerlendiren:</span> 
+                Zero Trust Security Assessment Team
+            </div>
+        </div>
+
+        <div class="summary-grid">
+            <div class="summary-card score">
+                <h3>Genel Güvenlik Skoru</h3>
+                <div class="value">77/100</div>
+                <div>Başarı Oranı: 77%</div>
+            </div>
+            <div class="summary-card">
+                <h3>Geçen Testler</h3>
+                <div class="value">10</div>
+                <div>Toplam: 13</div>
+            </div>
+            <div class="summary-card failed">
+                <h3>Başarısız Testler</h3>
+                <div class="value">3</div>
+                <div>Düzeltilmesi gerekenler</div>
+            </div>
+        </div>
+
+        
+        <div class="section">
+            <h2>Sistem Durumu</h2>
+            <div class="system-status">
+
+                <div class="service-card healthy">
+                    <div class="service-name">Keycloak</div>
+                    <div class="service-status healthy">Healthy</div>
+                    <div class="response-time">Yanıt Süresi: 12.6ms</div>
+                </div>
+
+                <div class="service-card healthy">
+                    <div class="service-name">User-Service</div>
+                    <div class="service-status healthy">Healthy</div>
+                    <div class="response-time">Yanıt Süresi: 5.5ms</div>
+                </div>
+
+                <div class="service-card healthy">
+                    <div class="service-name">Admin-Service</div>
+                    <div class="service-status healthy">Healthy</div>
+                    <div class="response-time">Yanıt Süresi: 21.9ms</div>
+                </div>
+
+                <div class="service-card healthy">
+                    <div class="service-name">Security-Test-Service</div>
+                    <div class="service-status healthy">Healthy</div>
+                    <div class="response-time">Yanıt Süresi: 25.7ms</div>
+                </div>
+
+            </div>
+        </div>
+
+        
+        <div class="section">
+            <h2>Güvenlik Test Sonuçları</h2>
+            <div class="test-grid">
+
+                <div class="test-item passed">
+                    <div class="test-name">Basic Security Test</div>
+                    <span class="test-result passed">PASSED</span>
+<div class="test-details"><strong>results:</strong> {'status': 'completed', 'test_id': 'test_1752224987', 'tests': {'authentication_test': 'passed', 'headers_test': 'passed', 'ssl_test': 'passed'}, 'timestamp': '2025-07-11T09:09:47.729855'}<br></div></div>
+                <div class="test-item failed">
+                    <div class="test-name">JWT Token Acquisition</div>
+                    <span class="test-result failed">FAILED</span>
+<div class="test-details"><strong>Hata:</strong> Cannot get token: HTTP 401</div></div>
+                <div class="test-item passed">
+                    <div class="test-name">Keycloak Service Availability</div>
+                    <span class="test-result passed">PASSED</span>
+<div class="test-details">Detay: HTTP 200</div></div>
+                <div class="test-item passed">
+                    <div class="test-name">Wrong Credentials Rejection</div>
+                    <span class="test-result passed">PASSED</span>
+<div class="test-details">Detay: HTTP 401</div>
+                    <div class="test-details">
+                        <strong>Beklenen:</strong> 401 Unauthorized<br>
+                        <strong>Gerçek:</strong> 401 Unauthorized
+                    </div>
+</div>
+                <div class="test-item failed">
+                    <div class="test-name">Security Headers - 5001</div>
+                    <span class="test-result failed">FAILED</span>
+<div class="test-details"><strong>Security Headers:</strong><br>✅ X-Content-Type-Options: PASSED<br>✅ X-Frame-Options: PASSED<br>✅ X-XSS-Protection: PASSED<br>❌ Strict-Transport-Security: FAILED<br>✅ Content-Security-Policy: PASSED<br></div></div>
+                <div class="test-item failed">
+                    <div class="test-name">Security Headers - 5002</div>
+                    <span class="test-result failed">FAILED</span>
+<div class="test-details"><strong>Security Headers:</strong><br>✅ X-Content-Type-Options: PASSED<br>✅ X-Frame-Options: PASSED<br>✅ X-XSS-Protection: PASSED<br>❌ Strict-Transport-Security: FAILED<br>✅ Content-Security-Policy: PASSED<br></div></div>
+                <div class="test-item passed">
+                    <div class="test-name">Normal Request Processing</div>
+                    <span class="test-result passed">PASSED</span>
+<div class="test-details">Detay: HTTP 200</div></div>
+                <div class="test-item passed">
+                    <div class="test-name">SQL Injection Protection</div>
+                    <span class="test-result passed">PASSED</span>
+<div class="test-details">Detay: No SQL injection vulnerabilities detected</div></div>
+                <div class="test-item passed">
+                    <div class="test-name">XSS Protection</div>
+                    <span class="test-result passed">PASSED</span>
+<div class="test-details">Detay: XSS protection active</div></div>
+            </div>
+        </div>
+
+        
+        <div class="section">
+            <h2>Uyumluluk Değerlendirmesi</h2>
+            <div class="compliance-grid">
+
+                <div class="compliance-section">
+                    <h3>NIST Zero Trust Architecture</h3>
+
+                    <div class="compliance-item">
+                        <span>Identity Verification</span>
+                        <span class="compliance-status compliant">COMPLIANT</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Device Verification</span>
+                        <span class="compliance-status compliant">COMPLIANT</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Least Privilege</span>
+                        <span class="compliance-status compliant">COMPLIANT</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Network Segmentation</span>
+                        <span class="compliance-status compliant">COMPLIANT</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Continuous Monitoring</span>
+                        <span class="compliance-status compliant">COMPLIANT</span>
+                    </div>
+</div>
+                <div class="compliance-section">
+                    <h3>OWASP Top 10 Compliance</h3>
+
+                    <div class="compliance-item">
+                        <span>Injection</span>
+                        <span class="compliance-status protected">PROTECTED</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Broken Authentication</span>
+                        <span class="compliance-status protected">PROTECTED</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Sensitive Data Exposure</span>
+                        <span class="compliance-status protected">PROTECTED</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Xml External Entities</span>
+                        <span class="compliance-status not_applicable">NOT_APPLICABLE</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Broken Access Control</span>
+                        <span class="compliance-status protected">PROTECTED</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Security Misconfiguration</span>
+                        <span class="compliance-status protected">PROTECTED</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Cross Site Scripting</span>
+                        <span class="compliance-status protected">PROTECTED</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Insecure Deserialization</span>
+                        <span class="compliance-status protected">PROTECTED</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Components With Vulnerabilities</span>
+                        <span class="compliance-status monitored">MONITORED</span>
+                    </div>
+
+                    <div class="compliance-item">
+                        <span>Insufficient Logging</span>
+                        <span class="compliance-status protected">PROTECTED</span>
+                    </div>
+</div>
+            </div>
+        </div>
+
+
+        <div class="footer">
+            <p>Bu rapor Zero Trust Security Assessment aracı tarafından otomatik olarak oluşturulmuştur.</p>
+            <p>Rapor tarihi: 11/07/2025 12:14</p>
+        </div>
+    </div>
+</body>
+</html>

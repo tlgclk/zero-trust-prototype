@@ -1,0 +1,209 @@
+{
+  "test_metadata": {
+    "assessment_date": "2025-07-11T14:25:09.949338",
+    "assessor": "Zero Trust Security Assessment Team",
+    "system_name": "Zero Trust Prototype",
+    "version": "1.0.0"
+  },
+  "system_status": {
+    "keycloak": {
+      "status": "healthy",
+      "response_time_ms": 15.26,
+      "details": {
+        "status": "UP",
+        "checks": [
+          {
+            "name": "Keycloak database connections async health check",
+            "status": "UP"
+          }
+        ]
+      }
+    },
+    "user-service": {
+      "status": "healthy",
+      "response_time_ms": 9.464,
+      "details": {
+        "service": "user-service",
+        "status": "healthy",
+        "timestamp": "2025-07-11T11:25:09.875591",
+        "version": "1.0.0"
+      }
+    },
+    "admin-service": {
+      "status": "healthy",
+      "response_time_ms": 8.616,
+      "details": {
+        "service": "admin-service",
+        "status": "healthy",
+        "timestamp": "2025-07-11T11:25:09.885747",
+        "version": "1.0.0"
+      }
+    },
+    "security-test-service": {
+      "status": "healthy",
+      "response_time_ms": 5.019,
+      "details": {
+        "service": "security-test-service",
+        "status": "healthy",
+        "timestamp": "2025-07-11T11:25:09.893131",
+        "version": "1.0.0"
+      }
+    }
+  },
+  "security_tests": {
+    "basic_security_test": {
+      "status": "completed",
+      "result": "PASSED",
+      "details": {
+        "results": {
+          "status": "completed",
+          "test_id": "test_1752233109",
+          "tests": {
+            "authentication_test": "passed",
+            "headers_test": "passed",
+            "ssl_test": "passed"
+          },
+          "timestamp": "2025-07-11T11:25:09.898815"
+        },
+        "status": "completed",
+        "test_id": "test_1752233109"
+      },
+      "timestamp": "2025-07-11T14:25:10.006441"
+    },
+    "token_acquisition": {
+      "test": "JWT Token Acquisition",
+      "result": "FAILED",
+      "error": "Cannot get token: HTTP 401"
+    },
+    "keycloak_availability": {
+      "test": "Keycloak Service Availability",
+      "result": "PASSED",
+      "details": "HTTP 200"
+    },
+    "wrong_credentials_rejection": {
+      "test": "Wrong Credentials Rejection",
+      "result": "PASSED",
+      "details": "HTTP 401",
+      "expected": "401 Unauthorized",
+      "actual": "401 Unauthorized"
+    },
+    "security_headers_5001": {
+      "test": "Security Headers - 5001",
+      "overall_result": "FAILED",
+      "headers": {
+        "X-Content-Type-Options": {
+          "present": true,
+          "expected": "nosniff",
+          "actual": "nosniff",
+          "result": "PASSED"
+        },
+        "X-Frame-Options": {
+          "present": true,
+          "expected": "DENY",
+          "actual": "DENY",
+          "result": "PASSED"
+        },
+        "X-XSS-Protection": {
+          "present": true,
+          "expected": "1; mode=block",
+          "actual": "1; mode=block",
+          "result": "PASSED"
+        },
+        "Strict-Transport-Security": {
+          "present": false,
+          "expected": "max-age=31536000; includeSubDomains",
+          "actual": null,
+          "result": "FAILED"
+        },
+        "Content-Security-Policy": {
+          "present": true,
+          "expected": "default-src 'self'",
+          "actual": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';",
+          "result": "PASSED"
+        }
+      }
+    },
+    "security_headers_5002": {
+      "test": "Security Headers - 5002",
+      "overall_result": "FAILED",
+      "headers": {
+        "X-Content-Type-Options": {
+          "present": true,
+          "expected": "nosniff",
+          "actual": "nosniff",
+          "result": "PASSED"
+        },
+        "X-Frame-Options": {
+          "present": true,
+          "expected": "DENY",
+          "actual": "DENY",
+          "result": "PASSED"
+        },
+        "X-XSS-Protection": {
+          "present": true,
+          "expected": "1; mode=block",
+          "actual": "1; mode=block",
+          "result": "PASSED"
+        },
+        "Strict-Transport-Security": {
+          "present": false,
+          "expected": "max-age=31536000; includeSubDomains",
+          "actual": null,
+          "result": "FAILED"
+        },
+        "Content-Security-Policy": {
+          "present": true,
+          "expected": "default-src 'self'",
+          "actual": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';",
+          "result": "PASSED"
+        }
+      }
+    },
+    "normal_request": {
+      "test": "Normal Request Processing",
+      "result": "PASSED",
+      "details": "HTTP 200"
+    },
+    "sql_injection_protection": {
+      "test": "SQL Injection Protection",
+      "result": "PASSED",
+      "payloads_tested": 3,
+      "details": "No SQL injection vulnerabilities detected"
+    },
+    "xss_protection": {
+      "test": "XSS Protection",
+      "result": "PASSED",
+      "payloads_tested": 3,
+      "details": "XSS protection active"
+    }
+  },
+  "compliance_tests": {
+    "nist_zero_trust": {
+      "identity_verification": "COMPLIANT",
+      "device_verification": "COMPLIANT",
+      "least_privilege": "COMPLIANT",
+      "network_segmentation": "COMPLIANT",
+      "continuous_monitoring": "COMPLIANT"
+    },
+    "owasp_top_10": {
+      "injection": "PROTECTED",
+      "broken_authentication": "PROTECTED",
+      "sensitive_data_exposure": "PROTECTED",
+      "xml_external_entities": "NOT_APPLICABLE",
+      "broken_access_control": "PROTECTED",
+      "security_misconfiguration": "PROTECTED",
+      "cross_site_scripting": "PROTECTED",
+      "insecure_deserialization": "PROTECTED",
+      "components_with_vulnerabilities": "MONITORED",
+      "insufficient_logging": "PROTECTED"
+    }
+  },
+  "performance_metrics": {},
+  "overall_score": 77,
+  "test_summary": {
+    "total_tests": 13,
+    "passed_tests": 10,
+    "failed_tests": 3,
+    "success_rate": "77%"
+  }
+}

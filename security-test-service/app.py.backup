@@ -1,0 +1,750 @@
+"""
+Zero Trust Security Testing Service
+Güvenlik testleri ve zafiyet taraması
+"""
+
+import os
+import sys
+import json
+import time
+import requests
+from flask import Flask, request, jsonify
+from datetime import datetime, timedelta
+import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
+import uuid
+
+# Shared auth utilities import
+sys.path.append('/app/shared')
+from auth_utils import require_auth, audit_log, get_user_info
+
+# OWASP ZAP integration
+sys.path.append('/app/zap')
+from zap_scanner import ZAPSecurityTester
+
+# Enhanced security testing
+from enhanced_security_tests import EnhancedSecurityTester
+
+app = Flask(__name__)
+
+# Logging configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('security_test.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+class SecurityTester:
+    def __init__(self):
+        self.test_results = {}
+        self.zap_tester = ZAPSecurityTester()
+        self.enhanced_tester = EnhancedSecurityTester()
+        self.services = [
+            {"name": "admin-service", "url": "http://admin-service:5000"},
+            {"name": "user-service", "url": "http://user-service:5000"}
+        ]
+    
+    def run_authentication_tests(self):
+        """Kimlik doğrulama testleri"""
+        results = []
+        
+        for service in self.services:
+            service_name = service["name"]
+            base_url = service["url"]
+            
+            # Test 1: Authentication olmadan erişim
+            try:
+                response = requests.get(f"{base_url}/info", timeout=5)
+                if response.status_code == 401:
+                    results.append({
+                        "test": "no_auth_access",
+                        "service": service_name,
+                        "status": "PASS",
+                        "message": "Service correctly rejects unauthenticated requests"
+                    })
+                else:
+                    results.append({
+                        "test": "no_auth_access",
+                        "service": service_name,
+                        "status": "FAIL",
+                        "message": f"Service allows unauthenticated access: {response.status_code}"
+                    })
+            except Exception as e:
+                results.append({
+                    "test": "no_auth_access",
+                    "service": service_name,
+                    "status": "ERROR",
+                    "message": str(e)
+                })
+            
+            # Test 2: Geçersiz token ile erişim
+            try:
+                headers = {"Authorization": "Bearer invalid_token"}
+                response = requests.get(f"{base_url}/info", headers=headers, timeout=5)
+                if response.status_code == 401:
+                    results.append({
+                        "test": "invalid_token_access",
+                        "service": service_name,
+                        "status": "PASS",
+                        "message": "Service correctly rejects invalid tokens"
+                    })
+                else:
+                    results.append({
+                        "test": "invalid_token_access",
+                        "service": service_name,
+                        "status": "FAIL",
+                        "message": f"Service accepts invalid token: {response.status_code}"
+                    })
+            except Exception as e:
+                results.append({
+                    "test": "invalid_token_access",
+                    "service": service_name,
+                    "status": "ERROR",
+                    "message": str(e)
+                })
+            
+            # Test 3: Health check erişilebilirliği
+            try:
+                response = requests.get(f"{base_url}/health", timeout=5)
+                if response.status_code == 200:
+                    results.append({
+                        "test": "health_check_available",
+                        "service": service_name,
+                        "status": "PASS",
+                        "message": "Health check endpoint is accessible"
+                    })
+                else:
+                    results.append({
+                        "test": "health_check_available",
+                        "service": service_name,
+                        "status": "FAIL",
+                        "message": f"Health check failed: {response.status_code}"
+                    })
+            except Exception as e:
+                results.append({
+                    "test": "health_check_available",
+                    "service": service_name,
+                    "status": "ERROR",
+                    "message": str(e)
+                })
+        
+        return results
+    
+    def run_rate_limiting_tests(self):
+        """Rate limiting testleri"""
+        results = []
+        
+        for service in self.services:
+            service_name = service["name"]
+            base_url = service["url"]
+            
+            # Test: Rate limiting
+            try:
+                # Hızlı ardışık istekler gönder
+                responses = []
+                for i in range(120):  # Limit 100 request/15min
+                    response = requests.get(f"{base_url}/health", timeout=2)
+                    responses.append(response.status_code)
+                    if response.status_code == 429:
+                        break
+                
+                if 429 in responses:
+                    results.append({
+                        "test": "rate_limiting",
+                        "service": service_name,
+                        "status": "PASS",
+                        "message": "Rate limiting is working correctly"
+                    })
+                else:
+                    results.append({
+                        "test": "rate_limiting",
+                        "service": service_name,
+                        "status": "FAIL",
+                        "message": "Rate limiting not enforced"
+                    })
+                    
+            except Exception as e:
+                results.append({
+                    "test": "rate_limiting",
+                    "service": service_name,
+                    "status": "ERROR",
+                    "message": str(e)
+                })
+        
+        return results
+    
+    def run_security_headers_tests(self):
+        """Güvenlik headers testleri"""
+        results = []
+        
+        for service in self.services:
+            service_name = service["name"]
+            base_url = service["url"]
+            
+            try:
+                response = requests.get(f"{base_url}/health", timeout=5)
+                headers = response.headers
+                
+                # Test güvenlik headers
+                security_headers = {
+                    "X-Content-Type-Options": "nosniff",
+                    "X-Frame-Options": "DENY",
+                    "X-XSS-Protection": "1; mode=block",
+                    "Strict-Transport-Security": "max-age=31536000"
+                }
+                
+                missing_headers = []
+                for header, expected_value in security_headers.items():
+                    if header not in headers:
+                        missing_headers.append(header)
+                
+                if not missing_headers:
+                    results.append({
+                        "test": "security_headers",
+                        "service": service_name,
+                        "status": "PASS",
+                        "message": "All security headers present"
+                    })
+                else:
+                    results.append({
+                        "test": "security_headers",
+                        "service": service_name,
+                        "status": "FAIL",
+                        "message": f"Missing headers: {missing_headers}"
+                    })
+                    
+            except Exception as e:
+                results.append({
+                    "test": "security_headers",
+                    "service": service_name,
+                    "status": "ERROR",
+                    "message": str(e)
+                })
+        
+        return results
+    
+    def run_full_security_test(self):
+        """Tüm güvenlik testlerini çalıştır"""
+        test_id = str(uuid.uuid4())
+        
+        logger.info(f"Starting security test: {test_id}")
+        
+        all_results = []
+        
+        # Authentication testleri
+        auth_results = self.run_authentication_tests()
+        all_results.extend(auth_results)
+        
+        # Rate limiting testleri
+        rate_results = self.run_rate_limiting_tests()
+        all_results.extend(rate_results)
+        
+        # Security headers testleri
+        headers_results = self.run_security_headers_tests()
+        all_results.extend(headers_results)
+        
+        # Sonuçları kaydet
+        test_summary = {
+            "test_id": test_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "total_tests": len(all_results),
+            "passed": len([r for r in all_results if r["status"] == "PASS"]),
+            "failed": len([r for r in all_results if r["status"] == "FAIL"]),
+            "errors": len([r for r in all_results if r["status"] == "ERROR"]),
+            "results": all_results
+        }
+        
+        self.test_results[test_id] = test_summary
+        
+        logger.info(f"Security test completed: {test_id}")
+        return test_summary
+
+security_tester = SecurityTester()
+
+# Health check endpoint
+@app.route("/health")
+def health_check():
+    """Sistem durumu kontrolü"""
+    return jsonify({
+        "status": "healthy",
+        "service": "security-test-service",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0.0"
+    })
+
+# Güvenlik testi başlatma
+@app.route("/security-test/start")
+@require_auth(required_roles=['admin'])
+@audit_log(action='START_SECURITY_TEST', resource='security_test')
+def start_security_test():
+    """Güvenlik testini başlat"""
+    try:
+        # Async test başlat
+        def run_test():
+            return security_tester.run_full_security_test()
+        
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(run_test)
+            result = future.result(timeout=60)  # 60 saniye timeout
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Security test failed: {str(e)}")
+        return jsonify({"error": "Security test failed"}), 500
+
+# Test sonuçlarını görüntüleme
+@app.route("/security-test/results")
+@require_auth(required_roles=['admin'])
+@audit_log(action='VIEW_SECURITY_TEST_RESULTS', resource='security_test_results')
+def view_test_results():
+    """Test sonuçlarını görüntüle"""
+    return jsonify({
+        "test_results": list(security_tester.test_results.values()),
+        "total_tests": len(security_tester.test_results)
+    })
+
+# Spesifik test sonucu
+@app.route("/security-test/results/<test_id>")
+@require_auth(required_roles=['admin'])
+@audit_log(action='VIEW_SPECIFIC_TEST_RESULT', resource='specific_test_result')
+def view_specific_test_result(test_id):
+    """Belirli bir test sonucunu görüntüle"""
+    if test_id in security_tester.test_results:
+        return jsonify(security_tester.test_results[test_id])
+    else:
+        return jsonify({"error": "Test result not found"}), 404
+
+# Güvenlik önerileri
+@app.route("/security-recommendations")
+@require_auth(required_roles=['admin'])
+@audit_log(action='VIEW_SECURITY_RECOMMENDATIONS', resource='security_recommendations')
+def security_recommendations():
+    """Güvenlik önerileri"""
+    return jsonify({
+        "recommendations": [
+            {
+                "category": "Authentication",
+                "items": [
+                    "Implement multi-factor authentication",
+                    "Use strong password policies",
+                    "Regularly rotate authentication secrets",
+                    "Monitor failed login attempts"
+                ]
+            },
+            {
+                "category": "Network Security",
+                "items": [
+                    "Implement network segmentation",
+                    "Use HTTPS for all communications",
+                    "Set up proper firewall rules",
+                    "Monitor network traffic"
+                ]
+            },
+            {
+                "category": "Application Security",
+                "items": [
+                    "Implement input validation",
+                    "Use security headers",
+                    "Regular security updates",
+                    "Code security reviews"
+                ]
+            },
+            {
+                "category": "Zero Trust",
+                "items": [
+                    "Never trust, always verify",
+                    "Implement least privilege access",
+                    "Continuous security monitoring",
+                    "Micro-segmentation"
+                ]
+            }
+        ],
+        "timestamp": datetime.utcnow().isoformat()
+    })
+
+# OWASP ZAP Integration Endpoints
+@app.route("/zap/scan/start")
+@require_auth(required_roles=['admin'])
+@audit_log(action='START_ZAP_SCAN', resource='zap_security_scan')
+def start_zap_scan():
+    """Start comprehensive OWASP ZAP security scan"""
+    try:
+        security_tester = SecurityTester()
+        
+        # Run ZAP scan in background thread
+        def run_scan():
+            scan_results = security_tester.zap_tester.run_all_targets()
+            test_id = str(uuid.uuid4())
+            security_tester.test_results[test_id] = {
+                "type": "zap_comprehensive_scan",
+                "status": "completed",
+                "results": scan_results,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+        thread = threading.Thread(target=run_scan)
+        thread.start()
+        
+        return jsonify({
+            "message": "ZAP security scan started",
+            "status": "running",
+            "estimated_duration": "5-10 minutes",
+            "check_results_at": "/zap/scan/results",
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"ZAP scan start failed: {str(e)}")
+        return jsonify({"error": "Failed to start ZAP scan"}), 500
+
+@app.route("/zap/scan/results")
+@require_auth(required_roles=['admin'])
+@audit_log(action='VIEW_ZAP_RESULTS', resource='zap_scan_results')
+def get_zap_results():
+    """Get OWASP ZAP scan results"""
+    try:
+        security_tester = SecurityTester()
+        
+        # Find latest ZAP scan results
+        zap_results = []
+        for test_id, result in security_tester.test_results.items():
+            if result.get("type") == "zap_comprehensive_scan":
+                zap_results.append({
+                    "test_id": test_id,
+                    "status": result.get("status"),
+                    "timestamp": result.get("timestamp"),
+                    "summary": {
+                        "targets_scanned": len(result.get("results", {}).get("targets", {})),
+                        "total_alerts": sum([
+                            len(target_data.get("tests", {}).get("security_alerts", {}).get("alerts", {}).get("High", [])) +
+                            len(target_data.get("tests", {}).get("security_alerts", {}).get("alerts", {}).get("Medium", [])) +
+                            len(target_data.get("tests", {}).get("security_alerts", {}).get("alerts", {}).get("Low", []))
+                            for target_data in result.get("results", {}).get("targets", {}).values()
+                        ])
+                    }
+                })
+        
+        return jsonify({
+            "zap_scan_results": zap_results,
+            "total_scans": len(zap_results),
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get ZAP results: {str(e)}")
+        return jsonify({"error": "Failed to retrieve ZAP results"}), 500
+
+@app.route("/zap/scan/report")
+@require_auth(required_roles=['admin'])
+@audit_log(action='GENERATE_ZAP_REPORT', resource='zap_security_report')
+def generate_zap_report():
+    """Generate comprehensive ZAP security report"""
+    try:
+        security_tester = SecurityTester()
+        report = security_tester.zap_tester.generate_security_report()
+        
+        return jsonify({
+            "security_report": report,
+            "generated_at": datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"ZAP report generation failed: {str(e)}")
+        return jsonify({"error": "Failed to generate ZAP report"}), 500
+
+# Webhook endpoint for Grafana alerts
+@app.route("/webhook/alert", methods=["POST"])
+def receive_alert_webhook():
+    """Receive security alerts from Grafana"""
+    try:
+        alert_data = request.get_json()
+        
+        # Log the alert
+        logger.warning(f"SECURITY_ALERT_RECEIVED: {json.dumps(alert_data)}")
+        
+        # Process alert and trigger response if needed
+        alert_response = {
+            "alert_received": True,
+            "alert_count": len(alert_data.get("alerts", [])),
+            "timestamp": datetime.utcnow().isoformat(),
+            "action": "logged_and_processed"
+        }
+        
+        return jsonify(alert_response)
+        
+    except Exception as e:
+        logger.error(f"Alert webhook processing failed: {str(e)}")
+        return jsonify({"error": "Failed to process alert"}), 500
+
+# Enhanced Security Testing Endpoints
+@app.route("/security-assessment/comprehensive", methods=["POST"])
+@require_auth
+def comprehensive_security_assessment():
+    """Run comprehensive security assessment"""
+    try:
+        logger.info("Starting comprehensive security assessment")
+        
+        # Run enhanced security tests
+        assessment_results = security_tester.enhanced_tester.run_comprehensive_security_assessment()
+        
+        # Store results
+        assessment_id = assessment_results["assessment_id"]
+        security_tester.test_results[assessment_id] = assessment_results
+        
+        # Return summary
+        response = {
+            "status": "completed",
+            "assessment_id": assessment_id,
+            "timestamp": assessment_results["timestamp"],
+            "security_score": assessment_results["security_score"],
+            "total_categories": len(assessment_results["tests"]),
+            "recommendations_count": len(assessment_results["recommendations"]),
+            "message": "Comprehensive security assessment completed successfully"
+        }
+        
+        audit_log("comprehensive_security_assessment", request, {
+            "assessment_id": assessment_id,
+            "score": assessment_results["security_score"]["overall_score"]
+        })
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Comprehensive assessment failed: {str(e)}")
+        return jsonify({"error": "Assessment failed", "details": str(e)}), 500
+
+@app.route("/security-assessment/results/<assessment_id>")
+@require_auth
+def get_assessment_results(assessment_id):
+    """Get detailed assessment results"""
+    try:
+        if assessment_id not in security_tester.test_results:
+            return jsonify({"error": "Assessment not found"}), 404
+        
+        results = security_tester.test_results[assessment_id]
+        
+        # Add executive summary
+        executive_summary = {
+            "assessment_overview": {
+                "assessment_id": assessment_id,
+                "timestamp": results["timestamp"],
+                "security_score": results["security_score"],
+                "overall_risk": _get_overall_risk_level(results["tests"])
+            },
+            "category_summary": _get_category_summary(results["tests"]),
+            "critical_findings": _get_critical_findings(results["tests"]),
+            "recommendations": results["recommendations"][:5]  # Top 5 recommendations
+        }
+        
+        response = {
+            "executive_summary": executive_summary,
+            "detailed_results": results,
+            "export_formats": ["json", "pdf", "html"]
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Failed to get assessment results: {str(e)}")
+        return jsonify({"error": "Failed to retrieve results"}), 500
+
+@app.route("/security-assessment/export/<assessment_id>")
+@require_auth
+def export_assessment_report(assessment_id):
+    """Export assessment report in different formats"""
+    try:
+        format_type = request.args.get('format', 'json').lower()
+        
+        if assessment_id not in security_tester.test_results:
+            return jsonify({"error": "Assessment not found"}), 404
+        
+        results = security_tester.test_results[assessment_id]
+        
+        if format_type == 'json':
+            return jsonify(results)
+        elif format_type == 'html':
+            html_report = _generate_html_report(results)
+            return html_report, 200, {'Content-Type': 'text/html'}
+        elif format_type == 'pdf':
+            # PDF generation would require additional libraries
+            return jsonify({"error": "PDF export not implemented yet"}), 501
+        else:
+            return jsonify({"error": "Unsupported format"}), 400
+            
+    except Exception as e:
+        logger.error(f"Export failed: {str(e)}")
+        return jsonify({"error": "Export failed"}), 500
+
+@app.route("/security-assessment/list")
+@require_auth
+def list_assessments():
+    """List all security assessments"""
+    try:
+        assessments = []
+        for assessment_id, results in security_tester.test_results.items():
+            if "security_score" in results:
+                assessments.append({
+                    "assessment_id": assessment_id,
+                    "timestamp": results["timestamp"],
+                    "security_score": results["security_score"]["overall_score"],
+                    "grade": results["security_score"]["grade"],
+                    "total_tests": results["security_score"]["total_tests"],
+                    "failed_tests": results["security_score"]["failed_tests"]
+                })
+        
+        # Sort by timestamp (newest first)
+        assessments.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        return jsonify({
+            "assessments": assessments,
+            "total_count": len(assessments)
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to list assessments: {str(e)}")
+        return jsonify({"error": "Failed to list assessments"}), 500
+
+# Utility functions for enhanced security testing
+def _get_overall_risk_level(tests: dict) -> str:
+    """Determine overall risk level"""
+    risk_levels = []
+    for category in tests.values():
+        if isinstance(category, dict) and "risk_level" in category:
+            risk_levels.append(category["risk_level"])
+    
+    if "CRITICAL" in risk_levels:
+        return "CRITICAL"
+    elif "HIGH" in risk_levels:
+        return "HIGH"
+    elif "MEDIUM" in risk_levels:
+        return "MEDIUM"
+    else:
+        return "LOW"
+
+def _get_category_summary(tests: dict) -> dict:
+    """Get summary of each test category"""
+    summary = {}
+    for category_name, category_data in tests.items():
+        if isinstance(category_data, dict):
+            summary[category_name] = {
+                "category": category_data.get("category", category_name),
+                "status": category_data.get("status", "unknown"),
+                "risk_level": category_data.get("risk_level", "unknown"),
+                "test_count": len(category_data.get("tests", {}))
+            }
+    return summary
+
+def _get_critical_findings(tests: dict) -> list:
+    """Extract critical security findings"""
+    critical_findings = []
+    for category_name, category_data in tests.items():
+        if isinstance(category_data, dict) and "tests" in category_data:
+            for test_name, test_result in category_data["tests"].items():
+                if isinstance(test_result, dict):
+                    if not test_result.get("secure", True):
+                        severity = "CRITICAL" if "critical" in test_result.get("details", "").lower() else "HIGH"
+                        critical_findings.append({
+                            "category": category_name,
+                            "test": test_name,
+                            "severity": severity,
+                            "details": test_result.get("details", ""),
+                            "recommendation": test_result.get("recommendation", "")
+                        })
+    return critical_findings
+
+def _generate_html_report(results: dict) -> str:
+    """Generate HTML security assessment report"""
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Security Assessment Report</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 20px; }}
+            .header {{ background-color: #f0f0f0; padding: 20px; border-radius: 5px; }}
+            .score {{ font-size: 24px; font-weight: bold; color: #2c3e50; }}
+            .grade-A {{ color: #27ae60; }}
+            .grade-B {{ color: #f39c12; }}
+            .grade-C {{ color: #e67e22; }}
+            .grade-D {{ color: #e74c3c; }}
+            .grade-F {{ color: #c0392b; }}
+            .category {{ margin: 20px 0; padding: 15px; border-left: 4px solid #3498db; }}
+            .recommendation {{ background-color: #ecf0f1; padding: 10px; margin: 10px 0; border-radius: 3px; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Zero Trust Security Assessment Report</h1>
+            <p><strong>Assessment ID:</strong> {results['assessment_id']}</p>
+            <p><strong>Timestamp:</strong> {results['timestamp']}</p>
+            <div class="score grade-{results['security_score']['grade'].replace('+', '')}">
+                Security Score: {results['security_score']['overall_score']}% (Grade: {results['security_score']['grade']})
+            </div>
+        </div>
+        
+        <h2>Executive Summary</h2>
+        <p>Total Tests: {results['security_score']['total_tests']}</p>
+        <p>Passed Tests: {results['security_score']['passed_tests']}</p>
+        <p>Failed Tests: {results['security_score']['failed_tests']}</p>
+        
+        <h2>Test Categories</h2>
+    """
+    
+    for category_name, category_data in results['tests'].items():
+        if isinstance(category_data, dict):
+            html_template += f"""
+            <div class="category">
+                <h3>{category_data.get('category', category_name)}</h3>
+                <p><strong>Status:</strong> {category_data.get('status', 'unknown')}</p>
+                <p><strong>Risk Level:</strong> {category_data.get('risk_level', 'unknown')}</p>
+            </div>
+            """
+    
+    html_template += f"""
+        <h2>Recommendations</h2>
+    """
+    
+    for rec in results.get('recommendations', [])[:10]:
+        html_template += f"""
+        <div class="recommendation">
+            <strong>{rec['category']} - {rec['test']}</strong><br>
+            {rec['recommendation']}<br>
+            <small>Priority: {rec['priority']}</small>
+        </div>
+        """
+    
+    html_template += """
+        </body>
+    </html>
+    """
+    
+    return html_template
+
+# Error handlers
+@app.errorhandler(401)
+def unauthorized(error):
+    return jsonify({"error": "Unauthorized access"}), 401
+
+@app.errorhandler(403)
+def forbidden(error):
+    return jsonify({"error": "Forbidden - Insufficient permissions"}), 403
+
+@app.errorhandler(429)
+def rate_limit_exceeded(error):
+    return jsonify({"error": "Rate limit exceeded"}), 429
+
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"Internal server error: {str(error)}")
+    return jsonify({"error": "Internal server error"}), 500
+
+if __name__ == "__main__":
+    logger.info("Starting Zero Trust Security Testing Service")
+    app.run(host="0.0.0.0", port=5000, debug=False)

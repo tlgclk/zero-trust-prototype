@@ -1,0 +1,58 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-service:5000']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+  - job_name: 'admin-service'
+    static_configs:
+      - targets: ['admin-service:5000']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+  - job_name: 'security-test-service'
+    static_configs:
+      - targets: ['security-test-service:5000']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+  - job_name: 'keycloak'
+    static_configs:
+      - targets: ['keycloak:8080']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+  - job_name: 'zap'
+    static_configs:
+      - targets: ['zap:8080']
+    metrics_path: '/JSON/core/view/stats'
+    scrape_interval: 60s
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 30s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093

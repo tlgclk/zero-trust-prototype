@@ -1,0 +1,120 @@
+apiVersion: 1
+
+groups:
+  - name: zero_trust_alerts
+    folder: "Zero Trust Alerts"
+    interval: 30s
+    rules:
+      - uid: service_down_001
+        title: "Service Down Alert"
+        condition: C
+        data:
+          - refId: A
+            queryType: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: up == 0
+              interval: ""
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            queryType: math
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expression: $A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+        noDataState: NoData
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 1 minute"
+        labels:
+          severity: critical
+          service: "{{ $labels.job }}"
+      
+      - uid: high_error_rate_002
+        title: "High Error Rate Alert"
+        condition: C
+        data:
+          - refId: A
+            queryType: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: rate(flask_http_request_exceptions_total[5m])
+              interval: ""
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            queryType: math
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expression: $A > 0.1
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+        noDataState: NoData
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Error rate is {{ $value }} errors per second"
+        labels:
+          severity: warning
+          service: "{{ $labels.job }}"
+      
+      - uid: high_failed_auth_003
+        title: "High Failed Authentication Attempts"
+        condition: C
+        data:
+          - refId: A
+            queryType: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              expr: rate(keycloak_failed_login_attempts[5m])
+              interval: ""
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            queryType: math
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expression: $A > 5
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+        noDataState: NoData
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "High number of failed authentication attempts"
+          description: "{{ $value }} failed login attempts per second"
+        labels:
+          severity: warning
+          type: security
